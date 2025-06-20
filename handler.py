@@ -1,42 +1,49 @@
 import json
-import os
-import requests
+import uuid
 import boto3
-from datetime import datetime
+import requests
+import os
 
 dynamodb = boto3.resource('dynamodb')
-table_name = os.getenv('DYNAMODB_TABLE')
+table_name = os.environ['DYNAMODB_TABLE']
 table = dynamodb.Table(table_name)
 
 def fetch_and_store(event, context):
-    api_url = "https://ultimosismo.igp.gob.pe/api/ultimo-sismo/ajaxb/2025"
-
     try:
-        response = requests.get(api_url)
-        data = response.json()
+        response = requests.get('https://ultimosismo.igp.gob.pe/api/ultimo-sismo/ajaxb/2025')
+        response.raise_for_status()
 
-        # Preparar ítem para DynamoDB
+        data = response.json()  # Esto es una lista
+        if not isinstance(data, list) or len(data) == 0:
+            return {
+                "statusCode": 500,
+                "body": json.dumps({"error": "No data received from the API"})
+            }
+
+        sismo = data[0]  # Primer elemento de la lista
+
+        # Construimos el item a insertar
         item = {
-            'id': str(datetime.utcnow().timestamp()),  # Clave primaria única
-            'fecha': data.get('fecha'),
-            'hora': data.get('hora'),
-            'magnitud': data.get('magnitud'),
-            'profundidad': data.get('profundidad'),
-            'epicentro': data.get('epicentro'),
-            'fuente': data.get('fuente'),
+            'id': str(uuid.uuid4()),  # Clave primaria aleatoria
+            'fecha': sismo.get('fecha', 'N/A'),
+            'hora': sismo.get('hora', 'N/A'),
+            'magnitud': sismo.get('magnitud', 'N/A'),
+            'profundidad': sismo.get('profundidad', 'N/A'),
+            'latitud': sismo.get('latitud', 'N/A'),
+            'longitud': sismo.get('longitud', 'N/A'),
+            'referencia': sismo.get('referencia', 'N/A')
         }
 
-        # Guardar en DynamoDB
         table.put_item(Item=item)
 
         return {
-            'statusCode': 200,
-            'body': json.dumps({'message': 'Sismo guardado exitosamente!', 'item': item})
+            "statusCode": 200,
+            "body": json.dumps({"message": "Sismo data stored successfully", "item": item})
         }
 
     except Exception as e:
         return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
         }
 
