@@ -1,10 +1,9 @@
 org: sebastianchu
-service: api-sismos
+service: api-web-scraping
 
 provider:
   name: aws
   runtime: python3.13
-  
   memorySize: 1024
   timeout: 30
   iam:
@@ -14,10 +13,10 @@ provider:
 
 functions:
   scrape_table:
-    handler: handler.fetch_and_store  # Asegúrate que handler.py tenga 'fetch_and_store'
+    handler: handler.lambda_handler
     package:
       include:
-        - ./**  # Incluir todo el contenido del directorio
+        - ./**
     events:
       - http:
           path: /scrape/table

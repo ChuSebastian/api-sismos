@@ -1,49 +1,70 @@
+import os
 import json
 import uuid
 import boto3
 import requests
-import os
 
 dynamodb = boto3.resource('dynamodb')
-table_name = os.environ['DYNAMODB_TABLE']
-table = dynamodb.Table(table_name)
+table = dynamodb.Table(os.environ['DYNAMODB_TABLE'])
 
-def fetch_and_store(event, context):
+API_URL = 'https://ultimosismo.igp.gob.pe/api/ultimo-sismo/ajaxb/2025'
+
+def lambda_handler(event, context):
     try:
-        response = requests.get('https://ultimosismo.igp.gob.pe/api/ultimo-sismo/ajaxb/2025')
-        response.raise_for_status()
+        resp = requests.get(API_URL)
+        resp.raise_for_status()
+        data = resp.json()
 
-        data = response.json()  # Esto es una lista
-        if not isinstance(data, list) or len(data) == 0:
+        if not isinstance(data, list):
             return {
                 "statusCode": 500,
-                "body": json.dumps({"error": "No data received from the API"})
+                "body": json.dumps({"error": "Respuesta de API no es una lista"})
             }
-
-        sismo = data[0]  # Primer elemento de la lista
-
-        # Construimos el item a insertar
-        item = {
-            'id': str(uuid.uuid4()),  # Clave primaria aleatoria
-            'fecha': sismo.get('fecha', 'N/A'),
-            'hora': sismo.get('hora', 'N/A'),
-            'magnitud': sismo.get('magnitud', 'N/A'),
-            'profundidad': sismo.get('profundidad', 'N/A'),
-            'latitud': sismo.get('latitud', 'N/A'),
-            'longitud': sismo.get('longitud', 'N/A'),
-            'referencia': sismo.get('referencia', 'N/A')
-        }
-
-        table.put_item(Item=item)
-
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"message": "Sismo data stored successfully", "item": item})
-        }
 
     except Exception as e:
         return {
             "statusCode": 500,
             "body": json.dumps({"error": str(e)})
         }
+
+    items_to_store = data[:10]  # Tomar los 10 más recientes
+    stored = []
+
+    for sismo in items_to_store:
+        item = {
+            'id': sismo.get('codigo', str(uuid.uuid4())),
+            'codigo': sismo.get('codigo'),
+            'reporte_acelerometrico_pdf': sismo.get('reporte_acelerometrico_pdf'),
+            'idlistasismos': sismo.get('idlistasismos'),
+            'fecha_local': sismo.get('fecha_local'),
+            'hora_local': sismo.get('hora_local'),
+            'fecha_utc': sismo.get('fecha_utc'),
+            'hora_utc': sismo.get('hora_utc'),
+            'latitud': sismo.get('latitud'),
+            'longitud': sismo.get('longitud'),
+            'magnitud': sismo.get('magnitud'),
+            'profundidad': sismo.get('profundidad'),
+            'referencia': sismo.get('referencia'),
+            'referencia2': sismo.get('referencia2'),
+            'referencia3': sismo.get('referencia3'),
+            'tipomagnitud': sismo.get('tipomagnitud'),
+            'mapa': sismo.get('mapa'),
+            'informe': sismo.get('informe'),
+            'publicado': sismo.get('publicado'),
+            'numero_reporte': sismo.get('numero_reporte'),
+            'id_pdf_tematico': sismo.get('id_pdf_tematico'),
+            'createdAt': sismo.get('createdAt'),
+            'updatedAt': sismo.get('updatedAt'),
+            'intensidad': sismo.get('intensidad'),
+        }
+        table.put_item(Item=item)
+        stored.append(item)
+
+    return {
+        "statusCode": 200,
+        "body": json.dumps({
+            "message": f"Se almacenaron {len(stored)} sismos",
+            "items": stored
+        }, default=str)
+    }
 
